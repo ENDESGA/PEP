@@ -12,6 +12,10 @@ If you care about compressed image size, this is for you. It's somewhere between
 
 -------
 
+### *( this is currently in the EXPERIMENTAL phase! )*
+
+-------
+
 ## How to use it:
 
 Use the C header like:
