@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="725" height="383" src="https://github.com/user-attachments/assets/1d725d13-52c0-43f3-99e6-cbe851af63a3" />
+  <img width="725" height="383" alt="pep_logo" src="https://github.com/user-attachments/assets/9b8922e7-cc9f-45e8-8ec7-206d92d50e8d" />
 </p>
 
 # Prediction-Encoded Pixels
@@ -103,7 +103,7 @@ pep p = pep_load( FILE_PATH );
 
 ## tree1
 
-<img width="112" height="96" alt="tree1" src="https://github.com/user-attachments/assets/1cbabc52-3603-4b34-83fa-28de88458ece" />
+<img width="112" height="96" alt="tree1" src="https://github.com/user-attachments/assets/c4ef770b-7ec0-4738-a86f-44c012dedf22" />
 
 112x96 : 4 colors
 
@@ -118,7 +118,7 @@ pep p = pep_load( FILE_PATH );
 
 ## font
 
-<img width="192" height="144" alt="font" src="https://github.com/user-attachments/assets/4698fe84-7ed7-42b9-a6d1-e7c91a13a72d" />
+<img width="192" height="144" alt="font" src="https://github.com/user-attachments/assets/f2c6a5bc-d516-4947-b888-491afe014a57" />
 
 192x144 : 2 colors
 
@@ -133,7 +133,7 @@ pep p = pep_load( FILE_PATH );
 
 ## nz_scene
 
-<img width="640" height="200" alt="nz_scene" src="https://github.com/user-attachments/assets/13f192e5-10bc-4955-b5df-c051a387838e" />
+<img width="640" height="200" alt="nz_scene" src="https://github.com/user-attachments/assets/24392eb5-888c-4d47-ae56-222c9f9e712c" />
 
 640x200 : 251 colors
 
