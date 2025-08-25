@@ -94,7 +94,7 @@ _pep_context;
 // I think the real solution is a pre-count of the frequency of each color, and
 // have a look-up table that this uses. But that might counteract the
 // optimization of making this smaller :shrugs:
-#define PEP_FREQ_MAX( PALETTE_SIZE ) ( PEP_FREQ_N << 3 )
+#define PEP_FREQ_MAX ( PEP_FREQ_N << 3 )
 
 // Sets the internal `accum` variable to the accumulated symbol-frequencies
 #define PEP_ACCUM( FREQ_REF, SYMBOL ) for( uint64_t _accum = 0; _accum < ( SYMBOL ); _accum++ ) accum += FREQ_REF[ _accum ]
@@ -378,7 +378,7 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 	uint32_t context_id = 0;
 	uint8_t buffer = 0;
 	uint8_t bits_left = 8;
-	uint64_t freq_max = PEP_FREQ_MAX( out_pep.palette_size );
+	uint64_t freq_max = PEP_FREQ_MAX;
 
 	p = in_pixels;
 	uint8_t indices_in_byte = 0;
@@ -527,7 +527,7 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 	uint64_t high = PEP_ARITH_MAX;
 	uint32_t context_id = 0;
 	const uint16_t max_symbols = in_pep->max_symbols + 1;
-	uint64_t freq_max = PEP_FREQ_MAX( in_pep->palette_size );
+	uint64_t freq_max = PEP_FREQ_MAX;
 
 	const uint32_t* const palette = in_pep->palette;
 	const uint64_t packed_indices_size = area / indices_per_byte;
@@ -795,7 +795,7 @@ static inline pep pep_load( const char* const file_path )
 {
 	pep out_pep = { 0 };
 	
-	if ( !file_path )
+	if( !file_path )
 	{
 		return out_pep;
 	}
