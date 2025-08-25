@@ -1,5 +1,6 @@
 /////// /////// /////// /////// /////// /////// ///////
 // Prediction-Encoded Pixels (.pep)
+// version 0.2
 // -------
 // made with love by ENDESGA : 2025 : always CC0 : FOSS forever
 // -------
@@ -15,7 +16,7 @@
 // but for now these are required:
 #include <stdint.h> // uint*_t
 #include <stdlib.h> // mem-alloc
-#include <stdio.h>  // FILE
+#include <stdio.h> // FILE
 #include <string.h> // memset
 
 // Copy and add this define ONCE before an `#include "PEP.h"`.
@@ -24,20 +25,21 @@
 /*
 #define PEP_IMPLEMENTATION
 */
-
 /////// /////// /////// /////// /////// /////// ///////
 
-// .pep can automatically convert from RGBA to BGRA, which is often for
-// low-level/backend rendering pipelines.
-// Windows only supports BGRA for example, and so sometimes it's easier to
+// .pep can automatically convert from RGBA to BGRA (little/big endian),
+// which is often for low-level/backend rendering pipelines.
+// Windows only supports ARGB for example, and so sometimes it's easier to
 // make the whole application use that format.
 typedef enum
 {
 	pep_rgba,
-	pep_bgra
+	pep_bgra,
+
+	pep_abgr,
+	pep_argb
 }
 pep_format;
-
 
 // This is the main struct-type that contains values for using this format.
 // The only weird one is `max_symbols`, which is a unique value per-image for
@@ -275,9 +277,9 @@ _pep_context;
 
 /////// /////// /////// /////// /////// /////// ///////
 
-static inline uint32_t pep_swap_rb( const uint32_t in_color );
+static inline uint32_t _pep_reformat( const uint32_t in_color, const pep_format in_format, const pep_format out_format );
 static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width, const uint16_t height, const pep_format in_format, const pep_format out_format );
-static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_format out_format );
+static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_format out_format, const uint8_t first_color_transparent );
 static inline void pep_free( pep* in_pep );
 
 static inline uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_size );
@@ -290,21 +292,44 @@ static inline pep pep_load( const char* const file_path );
 
 #ifdef PEP_IMPLEMENTATION
 
-static inline uint32_t pep_swap_rb( const uint32_t in_color )
+// PEP supports "dynamic formats", where you can specify what the in-bytes are,
+// and reformat to a different channel-order.
+// This means two "identical" PEP files can have different formats, but you
+// can choose how to reformat it when it decompresses!
+static inline uint32_t _pep_reformat( const uint32_t in_color, const pep_format in_format, const pep_format out_format )
 {
-	return ( in_color & 0x00ff00ff ) |
-	       ( ( in_color & 0xff000000 ) >> 16 ) |
-	       ( ( in_color & 0x0000ff00 ) << 16 );
+	if( in_format == out_format ) return in_color;
+
+	if( in_format <= pep_bgra && out_format <= pep_bgra )
+	{
+		return ( in_color & 0x00ff00ff ) | ( ( in_color & 0xff000000 ) >> 16 ) | ( ( in_color & 0x0000ff00 ) << 16 );
+	}
+	else if( in_format >= pep_abgr && out_format >= pep_abgr )
+	{
+		return ( in_color & 0xff00ff00 ) | ( ( in_color & 0x00ff0000 ) >> 16 ) | ( ( in_color & 0x000000ff ) << 16 );
+	}
+	else if( ( in_format ^ out_format ) == 2 )
+	{
+		return ( ( in_color & 0x000000ff ) << 24 ) | ( ( in_color & 0x0000ff00 ) << 8 ) | ( ( in_color & 0x00ff0000 ) >> 8 ) | ( ( in_color & 0xff000000 ) >> 24 );
+	}
+	else if( in_format < out_format )
+	{
+		return ( ( in_color & 0x000000ff ) << 24 ) | ( ( in_color & 0xffffff00 ) >> 8 );
+	}
+	else
+	{
+		return ( ( in_color & 0xff000000 ) >> 24 ) | ( ( in_color & 0x00ffffff ) << 8 );
+	}
 }
 
+// The format of the in_pixels has to be the same as in_format.
+// out_format is the one applied to the newly compressed pep
 static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width, const uint16_t height, const pep_format in_format, const pep_format out_format )
 {
 	pep out_pep = { 0 };
 	uint32_t pixels_area = width * height;
 
 	if( in_pixels == NULL || pixels_area == 0 ) return out_pep;
-
-	const uint8_t same_format = in_format == out_format;
 
 	const uint32_t* p = in_pixels;
 	const uint32_t* p_end = p + pixels_area;
@@ -319,41 +344,35 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 	///////
 	// palette construction
 
-	uint32_t this_p = same_format ? *p : pep_swap_rb( *p );
-	uint32_t last_p = this_p;
+	uint32_t last_p = 0;
+	uint32_t this_p = 0;
+	uint32_t formatted_p = 0;
 
-	find_palette:
+	while( p < p_end )
 	{
-		if( p > in_pixels && this_p == last_p ) goto skip_pixel;
+		this_p = *p;
+
+		if( p > in_pixels && this_p == last_p )
+		{
+			p++;
+			continue;
+		}
+
+		formatted_p = _pep_reformat( this_p, in_format, out_format );
 
 		uint16_t n = 0;
-		check_palette:
+		while( n < out_pep.palette_size && formatted_p != out_pep.palette[ n ] )
 		{
-			if( n == 0 && out_pep.palette_size > 0 )
-			{
-				if( ( this_p & 0xffffff00 ) == ( out_pep.palette[ 0 ] & 0xffffff00 ) ) goto found_palette;
-			}
-			else if( this_p == out_pep.palette[ n ] ) goto found_palette;
-			if( ++n < out_pep.palette_size ) goto check_palette;
-		}
-		found_palette:
-
-		if( n >= out_pep.palette_size && n < 256 )
-		{
-			if( out_pep.palette_size == 0 )
-			{
-				this_p = this_p & 0xffffff00;
-			}
-			out_pep.palette[ out_pep.palette_size++ ] = this_p;
+			n++;
 		}
 
-		skip_pixel:
+		if( n >= out_pep.palette_size && ( ( uint16_t )out_pep.palette_size + 1 ) < 256 )
+		{
+			out_pep.palette[ out_pep.palette_size++ ] = formatted_p;
+		}
+
 		last_p = this_p;
-		if( ++p < p_end )
-		{
-			this_p = same_format ? *p : pep_swap_rb( *p );
-			goto find_palette;
-		}
+		p++;
 	}
 
 	///////
@@ -368,7 +387,7 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 	static _pep_context contexts[ PEP_CONTEXTS_MAX + 1 ];
 	memset( contexts, 0, sizeof( _pep_context ) * ( PEP_CONTEXTS_MAX + 1 ) );
 
-	_pep_context *order0 = &contexts[ PEP_CONTEXTS_MAX ];
+	_pep_context*order0 = &contexts[ PEP_CONTEXTS_MAX ];
 	for( uint64_t i = 0; i < PEP_FREQ_N; i++ ) order0->freq[ i ] = 1;
 	order0->sum = PEP_FREQ_N;
 
@@ -388,19 +407,16 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 	{
 		if( p < p_end )
 		{
-			this_p = same_format ? *p : pep_swap_rb( *p );
-			uint8_t index = 0;
-			find_index:
+			this_p = _pep_reformat( *p, in_format, out_format );
+			uint16_t index = 0;
+			while( index < out_pep.palette_size && this_p != out_pep.palette[ index ] )
 			{
-				if( index == 0 )
+				if( ++index >= 256 )
 				{
-					if( ( this_p & 0xffffff00 ) == ( out_pep.palette[ 0 ] & 0xffffff00 ) ) goto found_index;
+					index = 0;
+					break;
 				}
-				else if( this_p == out_pep.palette[ index ] ) goto found_index;
-				++index;
-				goto find_index;
 			}
-			found_index:
 
 			symbol |= ( index << ( indices_in_byte * bits_per_index ) );
 			++indices_in_byte;
@@ -410,7 +426,7 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 		{
 			uint64_t accum = 0;
 			if( symbol > out_pep.max_symbols ) out_pep.max_symbols = symbol;
-			_pep_context *const context_ref = & contexts[ context_id % PEP_CONTEXTS_MAX ];
+			_pep_context* const context_ref = &contexts[ context_id % PEP_CONTEXTS_MAX ];
 			const uint32_t context_sum = context_ref->sum;
 
 			if( context_sum != 0 && context_ref->freq[ symbol ] != 0 )
@@ -477,16 +493,20 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 
 	if( bits_left < 8 )
 	{
-		*data_ref++ = buffer >> bits_left;
+		*data_ref++= buffer >> bits_left;
 	}
 
 	out_pep.bytes_size = data_ref - out_pep.bytes;
-	out_pep.bytes = ( uint8_t* )realloc( out_pep.bytes, out_pep.bytes_size );
+	out_pep.bytes = ( uint8_t* ) realloc( out_pep.bytes, out_pep.bytes_size );
 
 	return out_pep;
 }
 
-static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_format out_format )
+// You can decompress a pep into any format via out_format, it will correctly
+// do it for you via in_pep->format.
+// If you want the first color to be 0 alpha, set transparent_first_color to 1
+// otherwise just make it 0
+static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_format out_format, const uint8_t transparent_first_color )
 {
 	if( in_pep == NULL ) return NULL;
 	if( in_pep->bytes == NULL || in_pep->bytes_size == 0 || in_pep->width == 0 || in_pep->height == 0 ) return NULL;
@@ -494,7 +514,6 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 	const uint32_t area = in_pep->width * in_pep->height;
 	uint8_t* data_ref = in_pep->bytes;
 	uint32_t* out_pixels = ( uint32_t* )malloc( area * sizeof( uint32_t ) );
-	const uint8_t same_format = in_pep->format == out_format;
 
 	uint64_t canvas_pos = 0;
 
@@ -529,12 +548,25 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 	const uint16_t max_symbols = in_pep->max_symbols + 1;
 	uint64_t freq_max = PEP_FREQ_MAX;
 
-	const uint32_t* const palette = in_pep->palette;
+	static uint32_t palette[ 256 ];
+	memcpy( palette, in_pep->palette, in_pep->palette_size * sizeof( uint32_t ) );
 	const uint64_t packed_indices_size = area / indices_per_byte;
+
+	if( transparent_first_color != 0 )
+	{
+		if( in_pep->format <= pep_bgra )
+		{
+			palette[ 0 ] = palette[ 0 ] & 0xffffff00;
+		}
+		else
+		{
+			palette[ 0 ] = palette[ 0 ] & 0x00ffffff;
+		}
+	}
 
 	for( uint64_t b = 0; b < packed_indices_size; b++ )
 	{
-		_pep_context *const context_ref = & contexts[ context_id % PEP_CONTEXTS_MAX ];
+		_pep_context* const context_ref = &contexts[ context_id % PEP_CONTEXTS_MAX ];
 		const uint32_t context_sum = context_ref->sum;
 		uint64_t target = PEP_TARGET( value, ( context_sum != 0 ) ? context_sum : 1 );
 		uint64_t accum = 0;
@@ -604,7 +636,7 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 			while( indices_in_byte < indices_per_byte && canvas_pos < area )
 			{
 				const uint8_t palette_idx = ( symbol >> ( indices_in_byte * bits_per_index ) ) & index_mask;
-				out_pixels[ canvas_pos ] = same_format ? palette[ palette_idx ] : pep_swap_rb( palette[ palette_idx ] );
+				out_pixels[ canvas_pos ] = _pep_reformat( palette[ palette_idx ], in_pep->format, out_format );
 				++canvas_pos;
 				++indices_in_byte;
 			}
@@ -613,7 +645,7 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 		{
 			if( canvas_pos < area )
 			{
-				out_pixels[ canvas_pos ] = same_format ? palette[ symbol ] : pep_swap_rb( palette[ symbol ] );
+				out_pixels[ canvas_pos ] = _pep_reformat( palette[ symbol ], in_pep->format, out_format );
 				++canvas_pos;
 			}
 		}
@@ -640,23 +672,23 @@ static inline uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_siz
 {
 	uint64_t palette_bytes = in_pep->is_4bit ? ( in_pep->palette_size * sizeof( uint32_t ) ) >> 1 : sizeof( uint32_t ) * in_pep->palette_size;
 	uint64_t size = sizeof( uint32_t ) + ( sizeof( uint16_t ) << 1 ) + 3 * sizeof( uint8_t ) + palette_bytes + in_pep->bytes_size;
-	
+
 	uint8_t* out_bytes = ( uint8_t* )malloc( size );
 	uint8_t* bytes_ref = out_bytes;
 
 	// Pack bytes_size with is_4bit flag in highest bit
 	// If your compressed image is >2GB you have bigger problems </3
-	*( ( uint32_t* )bytes_ref ) = ( uint32_t )( in_pep->bytes_size | ( ( uint32_t )in_pep->is_4bit << 31 ) );
+	*( ( uint32_t* ) bytes_ref ) = ( uint32_t ) ( in_pep->bytes_size | ( ( uint32_t ) in_pep->is_4bit << 31 ) );
 	bytes_ref += sizeof( uint32_t );
-	
-	*( ( uint16_t* )bytes_ref ) = in_pep->width;
+
+	*( ( uint16_t* ) bytes_ref ) = in_pep->width;
 	bytes_ref += sizeof( uint16_t );
-	
-	*( ( uint16_t* )bytes_ref ) = in_pep->height;
+
+	*( ( uint16_t* ) bytes_ref ) = in_pep->height;
 	bytes_ref += sizeof( uint16_t );
-	
-	*bytes_ref++ = ( uint8_t )in_pep->format;
-	*bytes_ref++ = in_pep->palette_size;
+
+	*bytes_ref++= ( uint8_t ) in_pep->format;
+	*bytes_ref++= in_pep->palette_size;
 
 	if( in_pep->palette_size )
 	{
@@ -670,26 +702,26 @@ static inline uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_siz
 				uint8_t g = ( c >> 16 ) & 0xFF;
 				uint8_t br = ( c >> 8 ) & 0xFF;
 				uint8_t a = c & 0xFF;
-				
-				*bytes_ref++ = ( ( rb & 0xF0 ) >> 4 ) | ( g & 0xF0 );
-				*bytes_ref++ = ( ( br & 0xF0 ) >> 4 ) | ( a & 0xF0 );
+
+				*bytes_ref++= ( ( rb & 0xF0 ) >> 4 ) | ( g & 0xF0 );
+				*bytes_ref++= ( ( br & 0xF0 ) >> 4 ) | ( a & 0xF0 );
 			}
 		}
 		else
 		{
-			memcpy( bytes_ref, &in_pep->palette[ 0 ], sizeof( uint32_t ) * in_pep->palette_size );
+			memcpy( bytes_ref, & in_pep->palette[ 0 ], sizeof( uint32_t ) * in_pep->palette_size );
 			bytes_ref += sizeof( uint32_t ) * in_pep->palette_size;
 		}
 	}
 
-	*bytes_ref++ = in_pep->max_symbols;
+	*bytes_ref++= in_pep->max_symbols;
 
 	if( in_pep->bytes_size )
 	{
 		memcpy( bytes_ref, in_pep->bytes, in_pep->bytes_size );
 	}
 
-	*out_size = ( uint32_t )size;
+	*out_size = ( uint32_t ) size;
 	return out_bytes;
 }
 
@@ -698,18 +730,18 @@ static inline pep pep_deserialize( const uint8_t* const in_bytes )
 	pep out_pep = { 0 };
 	const uint8_t* bytes_ref = in_bytes;
 
-	uint32_t packed_data_size = *( ( uint32_t* )bytes_ref );
+	uint32_t packed_data_size = *( ( uint32_t* ) bytes_ref );
 	out_pep.is_4bit = ( packed_data_size >> 31 ) & 1;
 	out_pep.bytes_size = packed_data_size & 0x7FFFFFFF;
 	bytes_ref += sizeof( uint32_t );
 
-	out_pep.width = *( ( uint16_t* )bytes_ref );
+	out_pep.width = *( ( uint16_t* ) bytes_ref );
 	bytes_ref += sizeof( uint16_t );
-	
-	out_pep.height = *( ( uint16_t* )bytes_ref );
+
+	out_pep.height = *( ( uint16_t* ) bytes_ref );
 	bytes_ref += sizeof( uint16_t );
-	
-	out_pep.format = ( pep_format )*bytes_ref++;
+
+	out_pep.format = ( pep_format ) *bytes_ref++;
 	out_pep.palette_size = *bytes_ref++;
 
 	memset( out_pep.palette, 0, sizeof( uint32_t ) * 256 );
@@ -723,16 +755,13 @@ static inline pep pep_deserialize( const uint8_t* const in_bytes )
 			{
 				uint8_t b1 = *bytes_ref++;
 				uint8_t b2 = *bytes_ref++;
-				
+
 				uint8_t rb = ( b1 & 0x0F ) | ( ( b1 & 0x0F ) << 4 );
 				uint8_t g = ( b1 & 0xF0 ) | ( ( b1 & 0xF0 ) >> 4 );
 				uint8_t br = ( b2 & 0x0F ) | ( ( b2 & 0x0F ) << 4 );
 				uint8_t a = ( b2 & 0xF0 ) | ( ( b2 & 0xF0 ) >> 4 );
-				
-				out_pep.palette[ i ] = ( ( uint32_t )rb << 24 ) | 
-				                       ( ( uint32_t )g << 16 ) | 
-				                       ( ( uint32_t )br << 8 ) | 
-				                       ( uint32_t )a;
+
+				out_pep.palette[ i ] = ( ( uint32_t ) rb << 24 ) | ( ( uint32_t ) g << 16 ) | ( ( uint32_t ) br << 8 ) | ( uint32_t ) a;
 			}
 		}
 		else
@@ -769,13 +798,13 @@ static inline uint8_t pep_save( const pep* const in_pep, const char* const file_
 
 	uint32_t bytes_size = 0;
 	uint8_t* bytes = pep_serialize( in_pep, &bytes_size );
-	
+
 	if( !bytes || bytes_size == 0 )
 	{
 		return 0;
 	}
 
-	FILE* file = fopen( file_path, "wb" );
+	FILE * file = fopen( file_path, "wb" );
 	if( !file )
 	{
 		free( bytes );
@@ -783,7 +812,7 @@ static inline uint8_t pep_save( const pep* const in_pep, const char* const file_
 	}
 
 	size_t written = fwrite( bytes, 1, bytes_size, file );
-	
+
 	fclose( file );
 	free( bytes );
 
@@ -794,13 +823,13 @@ static inline uint8_t pep_save( const pep* const in_pep, const char* const file_
 static inline pep pep_load( const char* const file_path )
 {
 	pep out_pep = { 0 };
-	
+
 	if( !file_path )
 	{
 		return out_pep;
 	}
 
-	FILE* file = fopen( file_path, "rb" );
+	FILE * file = fopen( file_path, "rb" );
 	if( !file )
 	{
 		return out_pep;
@@ -821,7 +850,7 @@ static inline pep pep_load( const char* const file_path )
 	size_t read = fread( bytes, 1, file_size, file );
 	fclose( file );
 
-	if( read != ( size_t )file_size )
+	if( read != ( size_t ) file_size )
 	{
 		free( bytes );
 		return out_pep;
