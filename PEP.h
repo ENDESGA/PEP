@@ -157,7 +157,7 @@ _pep_context;
 		buffer = ( buffer >> 1 ) | ( ( BIT ) ? 0x80u : 0 );\
 		if( --bits_left == 0 )\
 		{\
-			*data_ref++= buffer;\
+			*data_ref++ = buffer;\
 			bits_left = 8;\
 			buffer = 0;\
 		}\
@@ -387,7 +387,7 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 	static _pep_context contexts[ PEP_CONTEXTS_MAX + 1 ];
 	memset( contexts, 0, sizeof( _pep_context ) * ( PEP_CONTEXTS_MAX + 1 ) );
 
-	_pep_context*order0 = &contexts[ PEP_CONTEXTS_MAX ];
+	_pep_context* order0 = &contexts[ PEP_CONTEXTS_MAX ];
 	for( uint64_t i = 0; i < PEP_FREQ_N; i++ ) order0->freq[ i ] = 1;
 	order0->sum = PEP_FREQ_N;
 
@@ -493,11 +493,11 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 
 	if( bits_left < 8 )
 	{
-		*data_ref++= buffer >> bits_left;
+		*data_ref++ = buffer >> bits_left;
 	}
 
 	out_pep.bytes_size = data_ref - out_pep.bytes;
-	out_pep.bytes = ( uint8_t* ) realloc( out_pep.bytes, out_pep.bytes_size );
+	out_pep.bytes = ( uint8_t* )realloc( out_pep.bytes, out_pep.bytes_size );
 
 	return out_pep;
 }
@@ -678,17 +678,17 @@ static inline uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_siz
 
 	// Pack bytes_size with is_4bit flag in highest bit
 	// If your compressed image is >2GB you have bigger problems </3
-	*( ( uint32_t* ) bytes_ref ) = ( uint32_t ) ( in_pep->bytes_size | ( ( uint32_t ) in_pep->is_4bit << 31 ) );
+	*( ( uint32_t* )bytes_ref ) = ( uint32_t ) ( in_pep->bytes_size | ( ( uint32_t ) in_pep->is_4bit << 31 ) );
 	bytes_ref += sizeof( uint32_t );
 
-	*( ( uint16_t* ) bytes_ref ) = in_pep->width;
+	*( ( uint16_t* )bytes_ref ) = in_pep->width;
 	bytes_ref += sizeof( uint16_t );
 
-	*( ( uint16_t* ) bytes_ref ) = in_pep->height;
+	*( ( uint16_t* )bytes_ref ) = in_pep->height;
 	bytes_ref += sizeof( uint16_t );
 
-	*bytes_ref++= ( uint8_t ) in_pep->format;
-	*bytes_ref++= in_pep->palette_size;
+	*bytes_ref++ = ( uint8_t ) in_pep->format;
+	*bytes_ref++ = in_pep->palette_size;
 
 	if( in_pep->palette_size )
 	{
@@ -703,25 +703,25 @@ static inline uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_siz
 				uint8_t br = ( c >> 8 ) & 0xFF;
 				uint8_t a = c & 0xFF;
 
-				*bytes_ref++= ( ( rb & 0xF0 ) >> 4 ) | ( g & 0xF0 );
-				*bytes_ref++= ( ( br & 0xF0 ) >> 4 ) | ( a & 0xF0 );
+				*bytes_ref++ = ( ( rb & 0xF0 ) >> 4 ) | ( g & 0xF0 );
+				*bytes_ref++ = ( ( br & 0xF0 ) >> 4 ) | ( a & 0xF0 );
 			}
 		}
 		else
 		{
-			memcpy( bytes_ref, & in_pep->palette[ 0 ], sizeof( uint32_t ) * in_pep->palette_size );
+			memcpy( bytes_ref, &in_pep->palette[ 0 ], sizeof( uint32_t ) * in_pep->palette_size );
 			bytes_ref += sizeof( uint32_t ) * in_pep->palette_size;
 		}
 	}
 
-	*bytes_ref++= in_pep->max_symbols;
+	*bytes_ref++ = in_pep->max_symbols;
 
 	if( in_pep->bytes_size )
 	{
 		memcpy( bytes_ref, in_pep->bytes, in_pep->bytes_size );
 	}
 
-	*out_size = ( uint32_t ) size;
+	*out_size = ( uint32_t )size;
 	return out_bytes;
 }
 
@@ -730,15 +730,15 @@ static inline pep pep_deserialize( const uint8_t* const in_bytes )
 	pep out_pep = { 0 };
 	const uint8_t* bytes_ref = in_bytes;
 
-	uint32_t packed_data_size = *( ( uint32_t* ) bytes_ref );
+	uint32_t packed_data_size = *( ( uint32_t* )bytes_ref );
 	out_pep.is_4bit = ( packed_data_size >> 31 ) & 1;
 	out_pep.bytes_size = packed_data_size & 0x7FFFFFFF;
 	bytes_ref += sizeof( uint32_t );
 
-	out_pep.width = *( ( uint16_t* ) bytes_ref );
+	out_pep.width = *( ( uint16_t* )bytes_ref );
 	bytes_ref += sizeof( uint16_t );
 
-	out_pep.height = *( ( uint16_t* ) bytes_ref );
+	out_pep.height = *( ( uint16_t* )bytes_ref );
 	bytes_ref += sizeof( uint16_t );
 
 	out_pep.format = ( pep_format ) *bytes_ref++;
@@ -804,7 +804,7 @@ static inline uint8_t pep_save( const pep* const in_pep, const char* const file_
 		return 0;
 	}
 
-	FILE * file = fopen( file_path, "wb" );
+	FILE* file = fopen( file_path, "wb" );
 	if( !file )
 	{
 		free( bytes );
@@ -829,7 +829,7 @@ static inline pep pep_load( const char* const file_path )
 		return out_pep;
 	}
 
-	FILE * file = fopen( file_path, "rb" );
+	FILE* file = fopen( file_path, "rb" );
 	if( !file )
 	{
 		return out_pep;
@@ -850,7 +850,7 @@ static inline pep pep_load( const char* const file_path )
 	size_t read = fread( bytes, 1, file_size, file );
 	fclose( file );
 
-	if( read != ( size_t ) file_size )
+	if( read != ( size_t )file_size )
 	{
 		free( bytes );
 		return out_pep;
