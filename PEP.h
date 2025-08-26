@@ -12,6 +12,10 @@
 
 /////// /////// /////// /////// /////// /////// ///////
 
+// Include guard.
+#ifndef _PEP_H_
+#define _PEP_H_
+
 // Might find a way to eliminate the use of memset to eliminate string.h,
 // but for now these are required:
 #include <stdint.h> // uint*_t
@@ -272,8 +276,31 @@ _pep_context;
 	}\
 	while( 0 )
 
+
+// This defines a set of macros that serve as wrappers for the standard
+// C library memory management functions: `malloc`, `realloc`, and `free`.
+// These macros can be used to easily replace the underlying memory allocation
+// implementation in a project, for example, with a custom allocator or a
+// debug-enabled version, without modifying all call sites.
+#ifndef PEP_MALLOC
+#	define PEP_MALLOC(size) malloc(size)
+#	define PEP_REALLOC(ptr, size) realloc(ptr, size)
+#	define PEP_FREE(ptr) free(ptr)
+#endif
+
+// Provides a cross-platform macro to count leading zeros in a 32-bit integer.
+#ifndef PEP_COUNT_LEADING_ZEROS
+#	ifdef _MSC_VER
+		// Microsoft Visual C++ compiler.
+#		define PEP_COUNT_LEADING_ZEROS(x) __lzcnt(x)
+#	else
+		// GCC/Clang compilers.
+#		define PEP_COUNT_LEADING_ZEROS(x) __builtin_clz(x)
+#	endif
+#endif
+
 // How many bits do we need to fit N values?
-#define bits_to_fit( N ) ( ( ( N ) <= 1 ) ? 1 : ( 32 - __builtin_clz( ( N ) - 1 ) ) )
+#define PEP_BITS_TO_FIT( N ) ( ( ( N ) <= 1 ) ? 1 : ( 32 - PEP_COUNT_LEADING_ZEROS( ( N ) - 1 ) ) )
 
 /////// /////// /////// /////// /////// /////// ///////
 
@@ -288,9 +315,20 @@ static inline pep pep_deserialize( const uint8_t* const in_bytes );
 static inline uint8_t pep_save( const pep* const in_pep, const char* const file_path );
 static inline pep pep_load( const char* const file_path );
 
+#endif // _PEP_H_
+
 /////// /////// /////// /////// /////// /////// ///////
 
 #ifdef PEP_IMPLEMENTATION
+
+#ifdef _MSC_VER
+//	Intrin header is only needed for implementation.
+#	include <intrin.h> // __lzcnt
+
+//	Disable unsafe fopen usage warning on MSVC compiler.
+#	pragma warning(push)
+#	pragma warning(disable: 4996)
+#endif
 
 // PEP supports "dynamic formats", where you can specify what the in-bytes are,
 // and reformat to a different channel-order.
@@ -334,7 +372,7 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 	const uint32_t* p = in_pixels;
 	const uint32_t* p_end = p + pixels_area;
 
-	out_pep.bytes = malloc( pixels_area * sizeof( uint32_t ) * 2 ); // zero chance it will be >2x the size
+	out_pep.bytes = (uint8_t*)PEP_MALLOC( pixels_area * sizeof( uint32_t ) * 2 ); // zero chance it will be >2x the size
 	out_pep.width = width;
 	out_pep.height = height;
 	out_pep.format = out_format;
@@ -378,7 +416,7 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 	///////
 	// pixels to packed-palette-indices and PPM order-2 compression
 
-	uint8_t bits_per_index = bits_to_fit( out_pep.palette_size );
+	uint8_t bits_per_index = PEP_BITS_TO_FIT( out_pep.palette_size );
 	if( bits_per_index > 8 ) bits_per_index = 8; // only 8 bits in a byte
 
 	const uint8_t indices_per_byte = 8 / bits_per_index;
@@ -497,7 +535,7 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 	}
 
 	out_pep.bytes_size = data_ref - out_pep.bytes;
-	out_pep.bytes = ( uint8_t* )realloc( out_pep.bytes, out_pep.bytes_size );
+	out_pep.bytes = ( uint8_t* )PEP_REALLOC( out_pep.bytes, out_pep.bytes_size );
 
 	return out_pep;
 }
@@ -513,11 +551,11 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 
 	const uint32_t area = in_pep->width * in_pep->height;
 	uint8_t* data_ref = in_pep->bytes;
-	uint32_t* out_pixels = ( uint32_t* )malloc( area * sizeof( uint32_t ) );
+	uint32_t* out_pixels = ( uint32_t* )PEP_MALLOC( area * sizeof( uint32_t ) );
 
 	uint64_t canvas_pos = 0;
 
-	uint8_t bits_per_index = bits_to_fit( in_pep->palette_size );
+	uint8_t bits_per_index = PEP_BITS_TO_FIT( in_pep->palette_size );
 	if( bits_per_index > 8 ) bits_per_index = 8; // only 8 bits in a byte
 
 	const uint8_t indices_per_byte = 8 / bits_per_index;
@@ -581,7 +619,7 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 				{
 					if( accum + freq > target )
 					{
-						symbol = s;
+						symbol = (uint8_t)s;
 						PEP_ENCODE( freq, context_sum );
 						PEP_UPDATE( context_ref, s );
 						goto done_decode;
@@ -608,7 +646,7 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 			accum += order0->freq[ j ];
 			if( accum > target )
 			{
-				symbol = j;
+				symbol = (uint8_t)j;
 				accum -= order0->freq[ j ];
 				PEP_ENCODE( order0->freq[ j ], order0->sum );
 
@@ -673,7 +711,7 @@ static inline uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_siz
 	uint64_t palette_bytes = in_pep->is_4bit ? ( in_pep->palette_size * sizeof( uint32_t ) ) >> 1 : sizeof( uint32_t ) * in_pep->palette_size;
 	uint64_t size = sizeof( uint32_t ) + ( sizeof( uint16_t ) << 1 ) + 3 * sizeof( uint8_t ) + palette_bytes + in_pep->bytes_size;
 
-	uint8_t* out_bytes = ( uint8_t* )malloc( size );
+	uint8_t* out_bytes = ( uint8_t* )PEP_MALLOC( size );
 	uint8_t* bytes_ref = out_bytes;
 
 	// Pack bytes_size with is_4bit flag in highest bit
@@ -773,7 +811,7 @@ static inline pep pep_deserialize( const uint8_t* const in_bytes )
 
 	out_pep.max_symbols = *bytes_ref++;
 
-	out_pep.bytes = ( out_pep.bytes_size != 0 ) ? ( uint8_t* )malloc( out_pep.bytes_size ) : NULL;
+	out_pep.bytes = ( out_pep.bytes_size != 0 ) ? ( uint8_t* )PEP_MALLOC( out_pep.bytes_size ) : NULL;
 	if( out_pep.bytes_size )
 	{
 		memcpy( out_pep.bytes, bytes_ref, out_pep.bytes_size );
@@ -807,14 +845,14 @@ static inline uint8_t pep_save( const pep* const in_pep, const char* const file_
 	FILE* file = fopen( file_path, "wb" );
 	if( !file )
 	{
-		free( bytes );
+		PEP_FREE( bytes );
 		return 0;
 	}
 
 	size_t written = fwrite( bytes, 1, bytes_size, file );
 
 	fclose( file );
-	free( bytes );
+	PEP_FREE( bytes );
 
 	return written == bytes_size;
 }
@@ -845,22 +883,26 @@ static inline pep pep_load( const char* const file_path )
 		return out_pep;
 	}
 
-	uint8_t* bytes = ( uint8_t* )malloc( file_size );
+	uint8_t* bytes = ( uint8_t* )PEP_MALLOC( file_size );
 
 	size_t read = fread( bytes, 1, file_size, file );
 	fclose( file );
 
 	if( read != ( size_t )file_size )
 	{
-		free( bytes );
+		PEP_FREE( bytes );
 		return out_pep;
 	}
 
 	out_pep = pep_deserialize( bytes );
-	free( bytes );
+	PEP_FREE( bytes );
 
 	return out_pep;
 }
+
+#ifdef _MSC_VER
+#	pragma warning(pop)
+#endif
 
 #endif
 
