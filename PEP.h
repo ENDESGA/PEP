@@ -1,6 +1,6 @@
 /////// /////// /////// /////// /////// /////// ///////
 // Prediction-Encoded Pixels (.pep)
-// version 0.2
+// version 0.3
 // -------
 // made with love by ENDESGA : 2025 : always CC0 : FOSS forever
 // -------
