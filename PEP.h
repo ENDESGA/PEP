@@ -77,10 +77,14 @@ pep;
 
 // These contants are for the 63bit arithmetic-coding, specifically not 64bit
 // because of overflow.
-#define PEP_ARITH_MAX 0x7fffffffffffffffu
-#define PEP_ARITH_LOW 0x2000000000000000u
-#define PEP_ARITH_MID 0x4000000000000000u
-#define PEP_ARITH_HIGH 0x6000000000000000u
+#define PEP_CODE_BITS 24lu
+#define PEP_FREQ_MAX_BITS 14lu
+#define PEP_PROB_MAX_VALUE (1 << PEP_FREQ_MAX_BITS)
+#define PEP_CODE_MAX_VALUE ((1 << PEP_CODE_BITS) - 1)
+#define PEP_ARITH_MAX ((1 << PEP_CODE_BITS) - 1)
+#define PEP_ARITH_LOW (1 << (PEP_CODE_BITS - 2))
+#define PEP_ARITH_MID (PEP_ARITH_LOW * 2)
+#define PEP_ARITH_HIGH (PEP_ARITH_LOW * 3)
 
 // During the compression process the context per frequency-group needs to be
 // tracked, with the sum of all frequencies being stored.
@@ -100,10 +104,161 @@ _pep_context;
 // I think the real solution is a pre-count of the frequency of each color, and
 // have a look-up table that this uses. But that might counteract the
 // optimization of making this smaller :shrugs:
-#define PEP_FREQ_MAX ( PEP_FREQ_N << 3 )
+#define PEP_FREQ_TH 124
+#define PEP_FREQ_MAX (PEP_FREQ_N * PEP_FREQ_TH)
+#define PEP_FREQ_MAX (PEP_FREQ_N << 3)
 
 // Sets the internal `accum` variable to the accumulated symbol-frequencies
 #define PEP_ACCUM( FREQ_REF, SYMBOL ) for( uint64_t _accum = 0; _accum < ( SYMBOL ); _accum++ ) accum += FREQ_REF[ _accum ]
+
+typedef struct
+{
+	uint8_t* data_ref;
+	uint32_t lo, range;
+} _pep_ac_ecnode;
+
+typedef struct
+{
+	uint8_t* data_ref;
+	uint8_t* end_of_data;
+	uint32_t lo, range, code;
+} _pep_ac_decode;
+
+typedef struct
+{
+	uint32_t hi;
+	uint32_t lo;
+	uint32_t scale;
+} _pep_prob;
+
+typedef struct
+{
+	_pep_prob prob;
+	uint32_t symbol;
+}  _pep_sym_decode;
+
+inline _pep_ac_ecnode _pep_init_arith_encode(uint8_t* data_ref)
+{
+	_pep_ac_ecnode ac = {};
+	ac.range = (uint32_t)((1llu << 32) - 1);
+	ac.data_ref = data_ref;
+	return ac;
+}
+
+// Getting cumulative frequnce of symbol
+inline _pep_prob _pep_get_prob_from_ctx(_pep_context* ctx, uint32_t symbol)
+{
+	_pep_prob prob = {};
+	prob.scale = ctx->sum;
+
+	for (uint32_t i = 0; i < symbol; ++i)
+	{
+		prob.lo += ctx->freq[i];
+	}
+
+	prob.hi = prob.lo + ctx->freq[symbol];
+	return prob;
+}
+
+// This encodes a symbol into the arithmetic-coding range. It scales the
+// current range based on the symbol's frequency and total frequency count.
+inline void _pep_arith_econde(_pep_ac_ecnode* ac, _pep_prob prob)
+{
+	ac->range /= prob.scale;
+	ac->lo += prob.lo * ac->range;
+	ac->range *= prob.hi - prob.lo;
+}
+
+// Adjusts the arithmetic-coding range by removing a boundary value
+// Main goal of this process is to keep our range from getting
+// too small.
+inline void _pep_arith_encode_normalize(_pep_ac_ecnode* ac)
+{
+	for (;;)
+	{
+		if ((ac->lo ^ (ac->lo + ac->range)) < PEP_CODE_MAX_VALUE)
+		{
+		}
+		else if (ac->range < PEP_PROB_MAX_VALUE)
+		{
+			ac->range = (-((int32_t)ac->lo)) & (PEP_PROB_MAX_VALUE - 1);
+		}
+		else break;
+
+		uint8_t byte = ac->lo >> 24;
+		ac->lo <<= 8;
+		ac->range <<= 8;
+		*ac->data_ref++ = byte;
+	}
+}
+
+inline void _pep_arith_encode_flush(_pep_ac_ecnode* ac)
+{
+	for (uint32_t i = 0; i < 4; i++)
+	{
+		uint8_t byte = ac->lo >> 24;
+		ac->lo <<= 8;
+		*ac->data_ref++ = byte;
+	}
+}
+
+inline _pep_ac_decode _pep_arith_decode_init(uint8_t* data_ref, uint32_t buff_size)
+{
+	_pep_ac_decode ac = {};
+	ac.range = (uint32_t)((1llu << 32) - 1);
+	ac.data_ref = data_ref;
+	ac.end_of_data = data_ref + buff_size;
+
+	for (uint32_t i = 0; i < 4; ++i)
+	{
+		uint8_t in_byte = 0;
+		if (ac.data_ref != ac.end_of_data)
+		{
+			in_byte = *ac.data_ref++;
+		}
+
+		ac.code = (ac.code << 8) | in_byte;
+	}
+
+	return ac;
+}
+
+// Geting current frequency by doing reverse trasformation
+inline uint32_t _pep_arith_decode_curr_freq(_pep_ac_decode* ac, uint32_t scale)
+{
+	ac->range /= scale;
+	uint32_t result = (ac->code - ac->lo) / (ac->range);
+	return result;
+}
+
+// Same as with the encode_normalize, only on decode we reading in value
+inline void _pep_arith_decode_update(_pep_ac_decode* ac, _pep_prob prob)
+{
+	ac->lo += ac->range * prob.lo;
+	ac->range *= prob.hi - prob.lo;
+
+	for (;;)
+	{
+		if ((ac->lo ^ (ac->lo + ac->range)) < PEP_CODE_MAX_VALUE)
+		{
+		}
+		else if (ac->range < PEP_PROB_MAX_VALUE)
+		{
+			ac->range = (-((int32_t)ac->lo)) & PEP_PROB_MAX_VALUE - 1;
+		}
+		else break;
+
+		uint8_t in_byte = 0;
+		if (ac->data_ref != ac->end_of_data)
+		{
+			in_byte = *ac->data_ref++;
+		}
+
+		ac->code = (ac->code << 8) | in_byte;
+		ac->range <<= 8;
+		ac->lo <<= 8;
+	}
+}
 
 // This encodes a symbol into the arithmetic-coding range. It scales the
 // current range based on the symbol's frequency and total frequency count.
@@ -124,7 +279,7 @@ _pep_context;
 			low = low + ( delta / TOTAL ) * accum + ( ( delta % TOTAL ) * accum ) / TOTAL;\
 		}\
 	}\
-	while( 0 )
+	while( 0 )\
 
 // Update the frequency table after encoding/decoding a symbol.
 // This increments the symbol's frequency and the total sum.
@@ -134,9 +289,9 @@ _pep_context;
 #define PEP_UPDATE( CONTEXT, SYMBOL )\
 	do\
 	{\
-		CONTEXT->freq[ SYMBOL ]++;\
-		CONTEXT->sum++;\
-		if( CONTEXT->sum > freq_max )\
+		CONTEXT->freq[ SYMBOL ] += 2;\
+		CONTEXT->sum += 2;\
+		if( CONTEXT->freq[ SYMBOL ]  > PEP_FREQ_TH )\
 		{\
 			CONTEXT->sum = 0;\
 			for( uint64_t f = 0; f < PEP_FREQ_N; f++ )\
@@ -429,13 +584,8 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 	for( uint64_t i = 0; i < PEP_FREQ_N; i++ ) order0->freq[ i ] = 1;
 	order0->sum = PEP_FREQ_N;
 
-	uint64_t low = 0;
-	uint64_t high = PEP_ARITH_MAX;
-	uint64_t underflow = 0;
+	_pep_ac_ecnode ac = _pep_init_arith_encode(data_ref);
 	uint32_t context_id = 0;
-	uint8_t buffer = 0;
-	uint8_t bits_left = 8;
-	uint64_t freq_max = PEP_FREQ_MAX;
 
 	p = in_pixels;
 	uint8_t indices_in_byte = 0;
@@ -469,23 +619,23 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 
 			if( context_sum != 0 && context_ref->freq[ symbol ] != 0 )
 			{
-				PEP_ACCUM( context_ref->freq, symbol );
-				PEP_ENCODE( context_ref->freq[ symbol ], context_sum );
+				_pep_prob prob = _pep_get_prob_from_ctx(context_ref, symbol);
+				_pep_arith_econde(&ac, prob);
 				PEP_UPDATE( context_ref, symbol );
 			}
 			else
 			{
 				if( context_sum != 0 )
 				{
-					accum = 0;
-					PEP_ACCUM( context_ref->freq, PEP_FREQ_END );
-					PEP_ENCODE( context_ref->freq[ PEP_FREQ_END ], context_sum );
-					PEP_COMPRESS_RENORM();
+					_pep_prob prob = _pep_get_prob_from_ctx(context_ref, PEP_FREQ_END);
+					_pep_arith_econde(&ac, prob);
+					_pep_arith_encode_normalize(&ac);
+					context_ref->freq[PEP_FREQ_END]++;
+					context_ref->sum++;
 				}
 
-				accum = 0;
-				PEP_ACCUM( order0->freq, symbol );
-				PEP_ENCODE( order0->freq[ symbol ], order0->sum );
+				_pep_prob prob = _pep_get_prob_from_ctx(order0, symbol);
+				_pep_arith_econde(&ac, prob);
 
 				if( context_sum == 0 )
 				{
@@ -496,7 +646,8 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 				context_ref->sum++;
 				PEP_UPDATE( order0, symbol );
 			}
-			PEP_COMPRESS_RENORM();
+
+			_pep_arith_encode_normalize(&ac);
 			context_id = ( ( context_id << 8 ) | symbol );
 
 			symbol = 0;
@@ -509,35 +660,38 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 		}
 	}
 
-	++underflow;
-	if( low < PEP_ARITH_MID )
-	{
-		PEP_BIT_OUT( 0 );
-		while( underflow > 0 )
-		{
-			PEP_BIT_OUT( 1 );
-			underflow--;
-		}
-	}
-	else
-	{
-		PEP_BIT_OUT( 1 );
-		while( underflow > 0 )
-		{
-			PEP_BIT_OUT( 0 );
-			underflow--;
-		}
-	}
+	_pep_arith_encode_flush(&ac);
 
-	if( bits_left < 8 )
-	{
-		*data_ref++ = buffer >> bits_left;
-	}
-
-	out_pep.bytes_size = data_ref - out_pep.bytes;
+	out_pep.bytes_size = ac.data_ref - out_pep.bytes;
 	out_pep.bytes = ( uint8_t* )PEP_REALLOC( out_pep.bytes, out_pep.bytes_size );
 
 	return out_pep;
+}
+
+inline _pep_sym_decode _pep_get_sym_from_freq(_pep_context* ctx, uint32_t target_freq, uint32_t max_symbol)
+{
+	_pep_sym_decode result = {};
+
+	uint32_t s = 0;
+	uint32_t freq = 0;
+	for (; s < max_symbol; ++s)
+	{
+		freq += ctx->freq[s];
+		if (freq > target_freq) break;
+	}
+
+	if (s >= max_symbol)
+	{
+		s = PEP_FREQ_END;
+		freq += ctx->freq[PEP_FREQ_END];
+	}
+
+	result.prob.hi = freq;
+	result.prob.lo = freq - ctx->freq[s];
+	result.prob.scale = ctx->sum;
+	result.symbol = s;
+
+	return result;
 }
 
 // You can decompress a pep into any format via out_format, it will correctly
@@ -568,23 +722,11 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 	for( uint64_t i = 0; i < PEP_FREQ_N; i++ ) order0->freq[ i ] = 1;
 	order0->sum = PEP_FREQ_N;
 
-	uint8_t buffer = 0;
-	uint8_t bits_left = 0;
-	uint64_t value = 0;
-
-	for( char i = 0; i < 63; i++ )
-	{
-		PEP_BIT_IN( value );
-	}
-
 	///////
 	// decompress PPM order-2 structure into packed-palette-indices
 
-	uint64_t low = 0;
-	uint64_t high = PEP_ARITH_MAX;
 	uint32_t context_id = 0;
 	const uint16_t max_symbols = in_pep->max_symbols + 1;
-	uint64_t freq_max = PEP_FREQ_MAX;
 
 	static uint32_t palette[ 256 ];
 	memcpy( palette, in_pep->palette, in_pep->palette_size * sizeof( uint32_t ) );
@@ -602,68 +744,49 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 		}
 	}
 
+	_pep_ac_decode ac = _pep_arith_decode_init(data_ref, in_pep->bytes_size);
+	_pep_sym_decode decode_result;
 	for( uint64_t b = 0; b < packed_indices_size; b++ )
 	{
 		_pep_context* const context_ref = &contexts[ context_id % PEP_CONTEXTS_MAX ];
 		const uint32_t context_sum = context_ref->sum;
-		uint64_t target = PEP_TARGET( value, ( context_sum != 0 ) ? context_sum : 1 );
-		uint64_t accum = 0;
-		uint8_t symbol = 0;
 
+		bool symbol_found = false;
 		if( context_sum != 0 )
 		{
-			for( uint64_t s = 0; s < max_symbols; s++ )
+			uint32_t decode_freq = _pep_arith_decode_curr_freq(&ac, context_sum);
+			decode_result = _pep_get_sym_from_freq(context_ref, decode_freq, max_symbols);
+			_pep_arith_decode_update(&ac, decode_result.prob);
+
+			if (decode_result.symbol != PEP_FREQ_END)
 			{
-				uint16_t freq = context_ref->freq[ s ];
-				if( freq )
-				{
-					if( accum + freq > target )
-					{
-						symbol = (uint8_t)s;
-						PEP_ENCODE( freq, context_sum );
-						PEP_UPDATE( context_ref, s );
-						goto done_decode;
-					}
-					accum += freq;
-				}
+				symbol_found = true;
+				PEP_UPDATE(context_ref, decode_result.symbol);
+
+				//goto done_decode; //E0546 with initialization below, unfortunately
 			}
-
-			if( context_ref->freq[ PEP_FREQ_END ] )
+			else
 			{
-				if( accum + context_ref->freq[ PEP_FREQ_END ] > target )
-				{
-					PEP_ENCODE( context_ref->freq[ PEP_FREQ_END ], context_sum );
-					PEP_DECOMPRESS_RENORM( value );
-				}
-			}
-		}
-
-		target = PEP_TARGET( value, order0->sum );
-		accum = 0;
-
-		for( uint64_t j = 0; j < max_symbols; j++ )
-		{
-			accum += order0->freq[ j ];
-			if( accum > target )
-			{
-				symbol = (uint8_t)j;
-				accum -= order0->freq[ j ];
-				PEP_ENCODE( order0->freq[ j ], order0->sum );
-
-				if( context_sum == 0 )
-				{
-					context_ref->freq[ PEP_FREQ_END ] = 1;
-					context_ref->sum = 1;
-				}
-				context_ref->freq[ symbol ] = 1;
+				context_ref->freq[PEP_FREQ_END]++;
 				context_ref->sum++;
-				PEP_UPDATE( order0, symbol );
-				break;
 			}
 		}
 
-		done_decode:
-		PEP_DECOMPRESS_RENORM( value );
+		if (!symbol_found)
+		{
+			uint32_t decode_freq = _pep_arith_decode_curr_freq(&ac, order0->sum);
+			decode_result = _pep_get_sym_from_freq(order0, decode_freq, max_symbols);
+			_pep_arith_decode_update(&ac, decode_result.prob);
+
+			if (context_sum == 0)
+			{
+				context_ref->freq[PEP_FREQ_END] = 1;
+				context_ref->sum = 1;
+			}
+			context_ref->freq[decode_result.symbol] = 1;
+			context_ref->sum++;
+			PEP_UPDATE(order0, decode_result.symbol);
+		}
 
 		///////
 		// convert packed-palette-indices to pixels
@@ -673,7 +796,7 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 			uint8_t indices_in_byte = 0;
 			while( indices_in_byte < indices_per_byte && canvas_pos < area )
 			{
-				const uint8_t palette_idx = ( symbol >> ( indices_in_byte * bits_per_index ) ) & index_mask;
+				const uint8_t palette_idx = (decode_result.symbol >> ( indices_in_byte * bits_per_index ) ) & index_mask;
 				out_pixels[ canvas_pos ] = _pep_reformat( palette[ palette_idx ], in_pep->format, out_format );
 				++canvas_pos;
 				++indices_in_byte;
@@ -683,12 +806,12 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 		{
 			if( canvas_pos < area )
 			{
-				out_pixels[ canvas_pos ] = _pep_reformat( palette[ symbol ], in_pep->format, out_format );
+				out_pixels[ canvas_pos ] = _pep_reformat( palette[ decode_result.symbol ], in_pep->format, out_format );
 				++canvas_pos;
 			}
 		}
 
-		context_id = ( ( context_id << 8 ) | symbol );
+		context_id = ( ( context_id << 8 ) | decode_result.symbol );
 	}
 
 	return out_pixels;
