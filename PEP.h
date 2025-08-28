@@ -230,7 +230,6 @@ static inline pep pep_load( const char* const file_path );
 
 /////// /////// /////// /////// /////// /////// ///////
 
-#define PEP_IMPLEMENTATION
 #ifdef PEP_IMPLEMENTATION
 
 #ifdef _MSC_VER
