@@ -96,12 +96,13 @@ pep p = pep_compress( PIXEL_BYTES, WIDTH, HEIGHT, IN_FORMAT, OUT_FORMAT );
 
 /*
 pep_decompress() parameters:
-	pep*       IN_PEP     = pep struct-pointer to decompress
-	pep_format OUT_FORMAT = channel-order of the new pixels, either pep_rgba or pep_bgra
+	pep*       IN_PEP                  = pep struct-pointer to decompress
+	pep_format OUT_FORMAT              = channel-order of the new pixels, either pep_rgba or pep_bgra
+	uint8_t    FIRST_COLOR_TRANSPARENT = 0 or 1 to make the first color have 0 Alpha
 returns:
 	a uint32_t* with the uncompressed pixel data
 */
-uint32_t* pixels = pep_decompress( IN_PEP, OUT_FORMAT );
+uint32_t* pixels = pep_decompress( IN_PEP, OUT_FORMAT, FIRST_COLOR_TRANSPARENT );
 
 /*
 pep_free() parameters:
