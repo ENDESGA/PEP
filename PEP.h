@@ -289,9 +289,9 @@ inline void _pep_arith_decode_update(_pep_ac_decode* ac, _pep_prob prob)
 #define PEP_UPDATE( CONTEXT, SYMBOL )\
 	do\
 	{\
-		CONTEXT->freq[ SYMBOL ]++;\
-		CONTEXT->sum++;\
-		if( CONTEXT->sum > PEP_FREQ_MAX )\
+		CONTEXT->freq[ SYMBOL ] += 2;\
+		CONTEXT->sum += 2;\
+		if( CONTEXT->freq[ SYMBOL ]  > PEP_FREQ_TH )\
 		{\
 			CONTEXT->sum = 0;\
 			for( uint64_t f = 0; f < PEP_FREQ_N; f++ )\
