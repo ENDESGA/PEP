@@ -74,7 +74,6 @@ typedef struct
 	uint32_t palette[ 256 ];
 	uint8_t palette_size;
 	uint8_t symbols_max;
-	uint16_t freq_max;
 	_pep_color_bits color_bits;
 }
 pep;
@@ -227,7 +226,6 @@ static inline pep pep_load( const char* const file_path );
 
 /////// /////// /////// /////// /////// /////// ///////
 
-#define PEP_IMPLEMENTATION
 #ifdef PEP_IMPLEMENTATION
 
 #ifdef _MSC_VER
