@@ -58,7 +58,7 @@ typedef enum
 _pep_color_bits;
 
 // This is the main struct-type that contains values for using this format.
-// The only weird one is `max_symbols`, which is a unique value per-image for
+// The only weird one is `symbols_max`, which is a unique value per-image for
 // how many prediction-symbols were used to compress it.
 //
 // `is_4bit` is something you can set after `pep_compress()` but before
@@ -73,7 +73,8 @@ typedef struct
 	pep_format format;
 	uint32_t palette[ 256 ];
 	uint8_t palette_size;
-	uint8_t max_symbols;
+	uint8_t symbols_max;
+	uint16_t freq_max;
 	_pep_color_bits color_bits;
 }
 pep;
@@ -107,16 +108,10 @@ typedef struct
 }
 _pep_context;
 
-// PEP_FREQ_MAX is the maximum accumulative frequency. I couldn't find specific
-// information regarding what this could be in regards to an image. Huge values
-// mostly work, but there seems to be an upper and lower boundary unique to
-// each image. This could be improved...
-// This current value came from pure brute-force. It used to involve the area
-// of the image, and at some point it used the palette-size.
-// I think the real solution is a pre-count of the frequency of each color, and
-// have a look-up table that this uses. But that might counteract the
-// optimization of making this smaller :shrugs:
-#define PEP_FREQ_MAX ( PEP_FREQ_N << 2 )
+// PEP_FREQ_MAX is the maximum accumulative frequency.
+// This is the starting maximum, and is scaled as the image compresses, via
+// the palette-delta; which seems to roughly correlate with the complexity.
+#define PEP_FREQ_MAX PEP_FREQ_END
 
 // Arithmetic coding structures:
 typedef struct
@@ -154,16 +149,18 @@ _pep_sym_decode;
 
 // Update the frequency table after encoding/decoding a symbol.
 // This increments the symbol's frequency and the total sum.
-// When we hit freq_max, we scale everything down to a quarter
-// to keep the frequencies manageable.
+// When we hit freq_max, we increase the freq_max via a complexity
+// approximation via the palette-size, then we scale everything down
+// to a quarter to keep the frequencies manageable.
 // This dynamic part helps the compression adapt to the image's patterns.
-#define PEP_UPDATE( CONTEXT, SYMBOL )\
+#define PEP_UPDATE( CONTEXT, SYMBOL, FREQ_MAX, PALETTE_SIZE )\
 	do\
 	{\
 		CONTEXT->freq[ SYMBOL ] += 2;\
 		CONTEXT->sum += 2;\
-		if( CONTEXT->freq[ SYMBOL ] > PEP_FREQ_MAX )\
+		if( CONTEXT->freq[ SYMBOL ] > FREQ_MAX )\
 		{\
+			FREQ_MAX += ( PEP_FREQ_END - PALETTE_SIZE ) >> 1;\
 			CONTEXT->sum = 0;\
 			for( uint64_t f = 0; f < PEP_FREQ_N; f++ )\
 			{\
@@ -213,7 +210,7 @@ static inline void _pep_arith_encode( _pep_ac_encode* const ac, const _pep_prob 
 static inline void _pep_arith_encode_normalize( _pep_ac_encode* const ac );
 static inline uint32_t _pep_arith_decode_curr_freq( _pep_ac_decode* const ac, const uint32_t scale );
 static inline void _pep_arith_decode_update( _pep_ac_decode* const ac, const _pep_prob prob );
-static inline _pep_sym_decode _pep_get_sym_from_freq( const _pep_context* const ctx, const uint32_t target_freq, const uint32_t max_symbol );
+static inline _pep_sym_decode _pep_get_sym_from_freq( const _pep_context* const ctx, const uint32_t target_freq, const uint32_t symbol_max );
 
 static inline uint32_t _pep_reformat( const uint32_t in_color, const pep_format in_format, const pep_format out_format );
 static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width, const uint16_t height, const pep_format in_format, const pep_format out_format );
@@ -230,6 +227,7 @@ static inline pep pep_load( const char* const file_path );
 
 /////// /////// /////// /////// /////// /////// ///////
 
+#define PEP_IMPLEMENTATION
 #ifdef PEP_IMPLEMENTATION
 
 #ifdef _MSC_VER
@@ -325,19 +323,19 @@ static inline void _pep_arith_decode_update( _pep_ac_decode* const ac, const _pe
 	}
 }
 
-static inline _pep_sym_decode _pep_get_sym_from_freq( const _pep_context* const ctx, const uint32_t target_freq, const uint32_t max_symbol )
+static inline _pep_sym_decode _pep_get_sym_from_freq( const _pep_context* const ctx, const uint32_t target_freq, const uint32_t symbol_max )
 {
 	_pep_sym_decode result = { };
 
 	uint32_t s = 0;
 	uint32_t freq = 0;
-	for( ; s < max_symbol; ++s )
+	for( ; s < symbol_max; ++s )
 	{
 		freq += ctx->freq[ s ];
 		if( freq > target_freq ) break;
 	}
 
-	if( s >= max_symbol )
+	if( s >= symbol_max )
 	{
 		s = PEP_FREQ_END;
 		freq += ctx->freq[ PEP_FREQ_END ];
@@ -454,14 +452,17 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 	_pep_ac_encode ac = { 0 };
 	ac.range = ( uint32_t )( ( 1llu << 32 ) - 1 );
 	ac.data_ref = data_ref;
-	uint32_t context_id = 0;
+	uint64_t context_id = 0;
 
 	p = in_pixels;
 	uint8_t indices_in_byte = 0;
 	uint8_t symbol = 0;
 
+	uint16_t freq_max = PEP_FREQ_MAX;
+
 	while( p < p_end || indices_in_byte > 0 )
 	{
+		//if(context_id > PEP_CONTEXTS_MAX) break;
 		if( p < p_end )
 		{
 			this_p = _pep_reformat( *p, in_format, out_format );
@@ -482,7 +483,7 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 		if( indices_in_byte >= indices_per_byte || ( p >= p_end && indices_in_byte > 0 ) )
 		{
 			uint64_t accum = 0;
-			if( symbol > out_pep.max_symbols ) out_pep.max_symbols = symbol;
+			if( symbol > out_pep.symbols_max ) out_pep.symbols_max = symbol;
 			_pep_context* const context_ref = &contexts[ context_id % PEP_CONTEXTS_MAX ];
 			const uint32_t context_sum = context_ref->sum;
 
@@ -490,7 +491,7 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 			{
 				_pep_prob prob = _pep_get_prob_from_ctx( context_ref, symbol );
 				_pep_arith_encode( &ac, prob );
-				PEP_UPDATE( context_ref, symbol );
+				PEP_UPDATE( context_ref, symbol, freq_max, out_pep.palette_size );
 			}
 			else
 			{
@@ -513,7 +514,7 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 				}
 				context_ref->freq[ symbol ] = 1;
 				context_ref->sum++;
-				PEP_UPDATE( order0, symbol );
+				PEP_UPDATE( order0, symbol, freq_max, out_pep.palette_size );
 			}
 
 			_pep_arith_encode_normalize( &ac );
@@ -574,7 +575,8 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 	// decompress PPM order-2 structure into packed-palette-indices
 
 	uint32_t context_id = 0;
-	const uint16_t max_symbols = in_pep->max_symbols + 1;
+	const uint16_t symbols_max = in_pep->symbols_max + 1;
+	uint16_t freq_max = PEP_FREQ_MAX;
 
 	static uint32_t palette[ 256 ];
 	memcpy( palette, in_pep->palette, in_pep->palette_size * sizeof( uint32_t ) );
@@ -618,13 +620,13 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 		if( context_sum != 0 )
 		{
 			uint32_t decode_freq = _pep_arith_decode_curr_freq( &ac, context_sum );
-			decode_result = _pep_get_sym_from_freq( context_ref, decode_freq, max_symbols );
+			decode_result = _pep_get_sym_from_freq( context_ref, decode_freq, symbols_max );
 			_pep_arith_decode_update( &ac, decode_result.prob );
 
 			if( decode_result.symbol != PEP_FREQ_END )
 			{
 				symbol_found = 1;
-				PEP_UPDATE( context_ref, decode_result.symbol );
+				PEP_UPDATE( context_ref, decode_result.symbol, freq_max, in_pep->palette_size );
 			}
 			else
 			{
@@ -636,7 +638,7 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 		if( !symbol_found )
 		{
 			uint32_t decode_freq = _pep_arith_decode_curr_freq( &ac, order0->sum );
-			decode_result = _pep_get_sym_from_freq( order0, decode_freq, max_symbols );
+			decode_result = _pep_get_sym_from_freq( order0, decode_freq, symbols_max );
 			_pep_arith_decode_update( &ac, decode_result.prob );
 
 			if( context_sum == 0 )
@@ -646,7 +648,7 @@ static inline uint32_t* pep_decompress( const pep* const in_pep, const pep_forma
 			}
 			context_ref->freq[ decode_result.symbol ] = 1;
 			context_ref->sum++;
-			PEP_UPDATE( order0, decode_result.symbol );
+			PEP_UPDATE( order0, decode_result.symbol, freq_max, in_pep->palette_size );
 		}
 
 		///////
@@ -735,7 +737,7 @@ static inline uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_siz
 	}
 	*bytes_ref++ = size;
 	
-	*bytes_ref++ = in_pep->max_symbols;
+	*bytes_ref++ = in_pep->symbols_max;
 	
 	switch( in_pep->color_bits )
 	{
@@ -815,7 +817,7 @@ static inline pep pep_deserialize( const uint8_t* const in_bytes )
 	if( !out_pep.bytes_size )
 		return out_pep;
 	
-	out_pep.max_symbols = *bytes_ref++;
+	out_pep.symbols_max = *bytes_ref++;
 	
 	memset( out_pep.palette, 0, sizeof( uint32_t ) * 256 );
 	
