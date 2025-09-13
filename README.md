@@ -28,6 +28,7 @@ Use the C header like:
 
 # Results:
 
+> "PNG ***max***" is the maximum compression, and is a lot slower than the usual "PNG ***fast***" that comes from exporting via Aseprite
 
 ## tree1
 
@@ -38,8 +39,9 @@ Use the C header like:
 | Format | Size (bytes) | Compression Ratio | Compression (ms) | Decompression (ms) |
 |--------|-------------|-------------------|------------------|-------------------|
 | **PEP** | 854    | 0.155x | 0.381 | 0.226 |
-| **PNG** | 984    | 0.180x |
+| **PNG (max)** | 906    | 0.165x |
 | **GIF** | 1,047  | 0.191x |
+| **PNG (fast)** | 1,081    | 0.197x |
 | **QOI** | 2,425  | 0.441x | 0.023 | 0.028 |
 | **BMP** | 5,494 | 1.00x  |
 
@@ -52,8 +54,9 @@ Use the C header like:
 
 | Format | Size (bytes) | Compression Ratio | Compression (ms) | Decompression (ms) |
 |--------|-------------|-------------------|------------------|-------------------|
+| **PNG (max)** | 1,256   | 0.350x |
 | **PEP** | 1,300   | 0.363x | 0.369 | 0.295 |
-| **PNG** | 1,318   | 0.368x |
+| **PNG (fast)** | 1,835   | 0.512x |
 | **GIF** | 1,919   | 0.535x |
 | **BMP** | 3,586   | 1.00x  |
 | **QOI** | 6,669   | 1.860x | 0.071 | 0.078 |
@@ -68,7 +71,8 @@ Use the C header like:
 | Format | Size (bytes) | Compression Ratio | Compression (ms) | Decompression (ms) |
 |--------|-------------|-------------------|------------------|-------------------|
 | **PEP** | 71,275 | 0.552x | 12.817 | 10.325 |
-| **PNG** | 84,657 | 0.656x |
+| **PNG (max)** | 81,038 | 0.628x |
+| **PNG (fast)** | 85,375 | 0.661x |
 | **GIF** | 96,997 | 0.751x |
 | **BMP** | 129,078 | 1.00x |
 | **QOI** | 180,533 | 1.399x | 1.03 | 1.004 |
@@ -83,7 +87,8 @@ Use the C header like:
 | Format | Size (bytes) | Compression Ratio | Compression (ms) | Decompression (ms) |
 |--------|-------------|-------------------|------------------|-------------------|
 | **PEP** | 155,947 | 0.592x | 27.527 | 20.381 |
-| **PNG** | 195,130 | 0.741x |
+| **PNG (max)** | 184,219 | 0.700x |
+| **PNG (fast)** | 195,130 | 0.741x |
 | **GIF** | 221,165 | 0.840x |
 | **BMP** | 263,222 | 1.00x |
 | **QOI** | 457,978 | 1.739x | 2.079 | 2.135 |
