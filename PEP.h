@@ -532,7 +532,7 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 	{
 		uint8_t byte = ac.low >> PEP_CODE_BITS;
 		ac.low <<= PEP_CODE_BITS_INV;
-		*ac.data_ref++= byte;
+		*ac.data_ref++ = byte;
 	}
 
 	out_pep.bytes_size = ac.data_ref - out_pep.bytes;
@@ -726,24 +726,24 @@ static inline uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_siz
 	uint8_t* out_bytes = ( uint8_t* )PEP_MALLOC( 15 + palette_bytes + in_pep->bytes_size );
 	uint8_t* bytes_ref = out_bytes;
 
-	*bytes_ref++= ( in_pep->format & 0x07 ) | ( ( in_pep->color_bits & 0x03 ) << 3 );
+	*bytes_ref++ = ( in_pep->format & 0x07 ) | ( ( in_pep->color_bits & 0x03 ) << 3 );
 
-	*bytes_ref++= in_pep->palette_size;
+	*bytes_ref++ = in_pep->palette_size;
 
 	uint32_t packed_dims = ( ( in_pep->width & 0xFFF ) << 12 ) | ( in_pep->height & 0xFFF );
-	*bytes_ref++= packed_dims >> 16;
-	*bytes_ref++= packed_dims >> 8;
-	*bytes_ref++= packed_dims;
+	*bytes_ref++ = packed_dims >> 16;
+	*bytes_ref++ = packed_dims >> 8;
+	*bytes_ref++ = packed_dims;
 
 	uint32_t size = in_pep->bytes_size;
 	while( size >= 0x80 )
 	{
-		*bytes_ref++= ( size | 0x80 ) & 0xFF;
+		*bytes_ref++ = ( size | 0x80 ) & 0xFF;
 		size >>= 7;
 	}
-	*bytes_ref++= size;
+	*bytes_ref++ = size;
 
-	*bytes_ref++= in_pep->symbols_max;
+	*bytes_ref++ = in_pep->symbols_max;
 
 	switch( in_pep->color_bits )
 	{
@@ -752,7 +752,7 @@ static inline uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_siz
 		{
 			uint32_t c1 = in_pep->palette[ i ];
 			uint32_t c2 = ( i + 1 < palette_count ) ? in_pep->palette[ i + 1 ] : 0;
-			*bytes_ref++= ( ( c1 >> 24 ) & 0x80 ) | ( ( c1 >> 17 ) & 0x40 ) | ( ( c1 >> 10 ) & 0x20 ) | ( ( c1 >> 3 ) & 0x10 ) | ( ( c2 >> 28 ) & 0x08 ) | ( ( c2 >> 21 ) & 0x04 ) | ( ( c2 >> 14 ) & 0x02 ) | ( ( c2 >> 7 ) & 0x01 );
+			*bytes_ref++ = ( ( c1 >> 24 ) & 0x80 ) | ( ( c1 >> 17 ) & 0x40 ) | ( ( c1 >> 10 ) & 0x20 ) | ( ( c1 >> 3 ) & 0x10 ) | ( ( c2 >> 28 ) & 0x08 ) | ( ( c2 >> 21 ) & 0x04 ) | ( ( c2 >> 14 ) & 0x02 ) | ( ( c2 >> 7 ) & 0x01 );
 		}
 		break;
 
@@ -760,7 +760,7 @@ static inline uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_siz
 		for( uint16_t i = 0; i < palette_count; i++ )
 		{
 			uint32_t c = in_pep->palette[ i ];
-			*bytes_ref++= ( ( c >> 24 ) & 0xC0 ) | ( ( c >> 18 ) & 0x30 ) | ( ( c >> 12 ) & 0x0C ) | ( ( c >> 6 ) & 0x03 );
+			*bytes_ref++ = ( ( c >> 24 ) & 0xC0 ) | ( ( c >> 18 ) & 0x30 ) | ( ( c >> 12 ) & 0x0C ) | ( ( c >> 6 ) & 0x03 );
 		}
 		break;
 
@@ -768,8 +768,8 @@ static inline uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_siz
 		for( uint16_t i = 0; i < palette_count; i++ )
 		{
 			uint32_t c = in_pep->palette[ i ];
-			*bytes_ref++= ( ( c >> 16 ) & 0xF0 ) | ( ( c >> 28 ) & 0x0F );
-			*bytes_ref++= ( c & 0xF0 ) | ( ( c >> 12 ) & 0x0F );
+			*bytes_ref++ = ( ( c >> 16 ) & 0xF0 ) | ( ( c >> 28 ) & 0x0F );
+			*bytes_ref++ = ( c & 0xF0 ) | ( ( c >> 12 ) & 0x0F );
 		}
 		break;
 
