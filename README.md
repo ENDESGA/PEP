@@ -1,12 +1,12 @@
 <p align="center">
-  <img width="725" height="383" alt="pep_logo" src="https://github.com/user-attachments/assets/9b8922e7-cc9f-45e8-8ec7-206d92d50e8d" />
+  <img width="725" height="383" alt="pep_logo" src="https://github.com/user-attachments/assets/db7a8101-77d9-4e85-9229-63a338fb8591" />
 </p>
 
 # Prediction-Encoded Pixels
 This format is specifically designed to be for low-color pixel art (<=16 colors works best, up to 256 colors is supported).
 
-It uses **"Prediction by Partial Matching, Order-2"** compression, which is able to compress packed-palette-indices smaller than GIF, PNG, and QOI, while sacrificing a bit of time.
-It's 2-10x slower than GIF/PNG/QOI (depending on the image), but often compresses the image 20-50% smaller than GIF/PNG (and multiple-times smaller than QOI).
+It uses **"Prediction by Partial Matching"** compression, which is able to compress packed-palette-indices smaller than GIF, PNG, and QOI, while sacrificing a bit of time.
+It's 2-10x slower than GIF/PNG (fast)/QOI (depending on the image), but often compresses the image 20-50% smaller than GIF/PNG (and multiple-times smaller than QOI).
 
 If you care about compressed image size, this is for you. It's somewhere between GIF and WEBP (.webp can compress better at times, but it's painfully slow).
 
@@ -21,14 +21,14 @@ If you care about compressed image size, this is for you. It's somewhere between
 Use the C header like:
 ```c
 #define PEP_IMPLEMENTATION
-#include "PEP.h"
+#include "pep.h"
 ```
 
 -------
 
 # Results:
 
-> "PNG ***max***" is the maximum compression, and is a lot slower than the usual "PNG ***fast***" that comes from exporting via Aseprite
+> "PNG ***max***" is the maximum compression via pngslim, and is a lot slower (10s of seconds) than the usual "PNG ***fast***" that comes from exporting via Aseprite/magick/etc.
 
 ## tree1
 
@@ -36,14 +36,14 @@ Use the C header like:
 
 112x96 : 4 colors
 
-| Format | Size (bytes) | Compression Ratio | Compression (ms) | Decompression (ms) |
-|--------|-------------|-------------------|------------------|-------------------|
-| **PEP** | 854    | 0.155x | 0.381 | 0.226 |
-| **PNG (max)** | 906    | 0.165x |
-| **GIF** | 1,047  | 0.191x |
-| **PNG (fast)** | 1,081    | 0.197x |
-| **QOI** | 2,425  | 0.441x | 0.023 | 0.028 |
-| **BMP** | 5,494 | 1.00x  |
+| Format | Size (bytes) | Compression Ratio | Speed |
+|--------|-------------|-------------------|-------|
+| **PEP** | 849    | 0.155x | Fast |
+| **PNG (max)** | 906    | 0.165x | Very Slow |
+| **GIF** | 1,047  | 0.191x | Faster |
+| **PNG (fast)** | 1,081    | 0.197x | Faster |
+| **QOI** | 2,425  | 0.441x | Very Fast |
+| **BMP** | 5,494 | 1.00x  | Very Fast |
 
 
 ## font
@@ -52,14 +52,14 @@ Use the C header like:
 
 192x144 : 2 colors
 
-| Format | Size (bytes) | Compression Ratio | Compression (ms) | Decompression (ms) |
-|--------|-------------|-------------------|------------------|-------------------|
-| **PNG (max)** | 1,256   | 0.350x |
-| **PEP** | 1,300   | 0.363x | 0.369 | 0.295 |
-| **PNG (fast)** | 1,835   | 0.512x |
-| **GIF** | 1,919   | 0.535x |
-| **BMP** | 3,586   | 1.00x  |
-| **QOI** | 6,669   | 1.860x | 0.071 | 0.078 |
+| Format | Size (bytes) | Compression Ratio | Speed |
+|--------|-------------|-------------------|-------|
+| **PNG (max)** | 1,256   | 0.350x | Very Slow |
+| **PEP** | 1,298   | 0.362x | Fast |
+| **PNG (fast)** | 1,835   | 0.512x | Faster |
+| **GIF** | 1,919   | 0.535x | Faster |
+| **BMP** | 3,586   | 1.00x  | Very Fast |
+| **QOI** | 6,669   | 1.860x | Very Fast |
 
 
 ## nz_scene
@@ -68,14 +68,14 @@ Use the C header like:
 
 640x200 : 251 colors
 
-| Format | Size (bytes) | Compression Ratio | Compression (ms) | Decompression (ms) |
-|--------|-------------|-------------------|------------------|-------------------|
-| **PEP** | 71,275 | 0.552x | 12.817 | 10.325 |
-| **PNG (max)** | 81,038 | 0.628x |
-| **PNG (fast)** | 85,375 | 0.661x |
-| **GIF** | 96,997 | 0.751x |
-| **BMP** | 129,078 | 1.00x |
-| **QOI** | 180,533 | 1.399x | 1.03 | 1.004 |
+| Format | Size (bytes) | Compression Ratio | Speed |
+|--------|-------------|-------------------|-------|
+| **PEP** | 70,991 | 0.550x | Fast |
+| **PNG (max)** | 81,038 | 0.628x | Very Slow |
+| **PNG (fast)** | 85,375 | 0.661x | Faster |
+| **GIF** | 96,997 | 0.751x | Faster |
+| **BMP** | 129,078 | 1.00x | Very Fast |
+| **QOI** | 180,533 | 1.399x | Very Fast |
 
 
 ## baboon
@@ -84,40 +84,40 @@ Use the C header like:
 
 512x512 : 256 colors
 
-| Format | Size (bytes) | Compression Ratio | Compression (ms) | Decompression (ms) |
-|--------|-------------|-------------------|------------------|-------------------|
-| **PEP** | 155,947 | 0.592x | 27.527 | 20.381 |
-| **PNG (max)** | 184,219 | 0.700x |
-| **PNG (fast)** | 195,130 | 0.741x |
-| **GIF** | 221,165 | 0.840x |
-| **BMP** | 263,222 | 1.00x |
-| **QOI** | 457,978 | 1.739x | 2.079 | 2.135 |
+| Format | Size (bytes) | Compression Ratio | Speed |
+|--------|-------------|-------------------|-------|
+| **PEP** | 154,967 | 0.589x | Fast |
+| **PNG (max)** | 184,219 | 0.700x | Very Slow |
+| **PNG (fast)** | 195,130 | 0.741x | Faster |
+| **GIF** | 221,165 | 0.840x | Faster |
+| **BMP** | 263,222 | 1.00x | Very Fast |
+| **QOI** | 457,978 | 1.739x | Very Fast |
 
 -------
 
 ## Mini-documentation:
 
-PEP is designed for games too, so the compression outputs a structure that has useful elements. The PEP.data pointer ONLY contains the bytes for the pixels.
+pep is designed for games too, so the compression outputs a structure that has useful elements. The pep.data pointer ONLY contains the bytes for the pixels.
 This library doesn't have a BMP loader, so this is specifically designed for setups where the color bytes already exist.
 You just feed it into pep_compress() with the correct in_format of the bytes, and then you're able to use it however you like! Often you just use pep_save() after compressing, and then pep_load() + pep_decompress() to access the image data.
 
 ```c
 /*
 pep_compress() parameters:
-	uint32_t*  PIXEL_BYTES = raw RGBA/BGRA pixels
-	uint16_t   WIDTH       = width of the image
-	uint16_t   HEIGHT      = height of the image
-	pep_format IN_FORMAT   = channel-order of PIXEL_BYTES, either pep_rgba or pep_bgra
-	pep_format OUT_FORMAT  = channel-order of the new PEP, either pep_rgba or pep_bgra
+	uint32_t*        PIXEL_BYTES = raw RGBA/BGRA pixels
+	uint16_t         WIDTH       = width of the image
+	uint16_t         HEIGHT      = height of the image
+	pep_format       IN_FORMAT   = channel-byte-order of PIXEL_BYTES: pep_rgba, pep_bgra, pep_argb, or pep_abgr
+	pep_channel_bits BITS  = bits-per-channel: pep_1bit, pep_2bit, pep_4bit, pep_8bit (default)
 returns:
 	a pep struct
 */
-pep p = pep_compress( PIXEL_BYTES, WIDTH, HEIGHT, IN_FORMAT, OUT_FORMAT );
+pep p = pep_compress( PIXEL_BYTES, WIDTH, HEIGHT, IN_FORMAT, BITS );
 
 /*
 pep_decompress() parameters:
 	pep*       IN_PEP                  = pep struct-pointer to decompress
-	pep_format OUT_FORMAT              = channel-order of the new pixels, either pep_rgba or pep_bgra
+	pep_format OUT_FORMAT              = channel-byte-order of the new pixels: pep_rgba, pep_bgra, pep_argb, or pep_abgr
 	uint8_t    FIRST_COLOR_TRANSPARENT = 0 or 1 to make the first color have 0 Alpha
 returns:
 	a uint32_t* with the uncompressed pixel data
