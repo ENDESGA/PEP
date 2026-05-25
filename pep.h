@@ -64,7 +64,8 @@ pep_format;
 
 // Palette colors can be restricted in the serialization phase to a maximum
 // amount of bits per channel.
-// The default is 8 bits per channel (standard 32 bit colors)
+// The default is 8 bits per channel (standard 32 bit colors).
+// This is NOT bits-per-pixel and does NOT cap palette_size.
 typedef enum
 {
 	pep_1bit,
@@ -76,9 +77,11 @@ pep_channel_bits;
 
 // This is the main struct-type that contains values for using this format.
 //
-// `is_4bit` is something you can set after `pep_compress()` but before
-// `pep_to_bytes()` which quantizes the palette colors to 4bits per channel,
-// making the file slightly smaller, but limits the color-range.
+// `channel_bits` controls how many bits each R/G/B/A component of every
+// palette entry is quantized to during serialization. It does NOT limit
+// the number of palette entries (that's `palette_size`, up to 256).
+// For example, pep_2bit means each channel has 4 possible values (0/85/170/255),
+// so the palette can only draw from 4*4*4 = 64 distinct RGB colors.
 typedef struct
 {
 	uint8_t* bytes;
@@ -402,6 +405,11 @@ static inline uint32_t _pep_reformat( const uint32_t in_color, const pep_format 
 
 // The format of the in_pixels has to be the same as in_format.
 // out_format is the one applied to the newly compressed pep
+
+// Compresses raw pixels into a pep.
+// `in_format` describes the layout of in_pixels (and is stored on the result).
+// `in_palette_channel_bits` quantizes each R/G/B/A channel of every palette
+// entry to that many bits upon serialization (default is pep_8bit).
 static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width, const uint16_t height, const pep_format in_format, const pep_channel_bits in_channel_bits )
 {
 	pep out_pep = { 0 };
