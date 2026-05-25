@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="725" height="383" alt="pep_logo" src="https://github.com/user-attachments/assets/db7a8101-77d9-4e85-9229-63a338fb8591" />
+	<img width="960" height="540" alt="logo" src="https://github.com/user-attachments/assets/d251f370-fb1d-4598-a4d9-55070fe5e105" />
 </p>
 
 # Prediction-Encoded Pixels
