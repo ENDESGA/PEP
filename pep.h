@@ -466,7 +466,6 @@ static inline pep pep_compress( const uint32_t* in_pixels, const uint16_t width,
 	if( bits_per_index > 8 ) bits_per_index = 8; // only 8 bits in a byte
 
 	const uint8_t indices_per_byte = 8 / bits_per_index;
-	const uint8_t index_mask = ( 1 << bits_per_index ) - 1;
 
 	static _pep_context contexts[ PEP_CONTEXTS_MAX + 1 ];
 	memset( contexts, 0, sizeof( _pep_context ) * ( PEP_CONTEXTS_MAX + 1 ) );
@@ -799,7 +798,6 @@ static inline uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_siz
 	const uint64_t total_size = dim_bytes + size_bytes + ( is_bitmap ? 0 : 1 ) + palette_bytes + in_pep->bytes_size + 4;
 	uint8_t* out_bytes = ( uint8_t* )PEP_MALLOC( total_size );
 	uint8_t* out_bytes_ref = out_bytes;
-	uint8_t* out_bytes_end = out_bytes + total_size;
 
 	// flags: format (2), channel_bits (2), is_small (1), only_rgb (1), is_bitmap (1)
 	*out_bytes_ref++ = ( in_pep->format & 0x3 ) | ( ( in_pep->channel_bits & 0x3 ) << 2 ) | ( ( is_small & 0x1 ) << 4 ) | ( ( only_rgb & 0x1 ) << 5 ) | ( ( is_bitmap & 0x1 ) << 6 );
