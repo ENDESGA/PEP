@@ -1262,7 +1262,7 @@ static uint8_t pep_save( const pep* const in_pep, const char* const file_path )
 	PEP_FREE( bytes );
 
 	#ifdef PEP_DEBUG
-		printf( "pep: %lld\nfile: %lld\nmodel: %d\n", in_pep->bytes_size, written, in_pep->model );
+		printf( "pep: %lld\nfile: %zu\nmodel: %d\n", in_pep->bytes_size, written, in_pep->model );
 	#endif
 
 	return written == bytes_size;
