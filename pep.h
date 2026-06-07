@@ -265,22 +265,13 @@ pep;
 ////////////////////////////////////////////////////////////////
 #pragma region - functions
 
-static _pep_prob _pep_get_prob_from_context( const _pep_context* const context, const uint32_t symbol );
-static void _pep_arith_encode( _pep_ac_encode* const ac, const _pep_prob prob );
-static void _pep_arith_encode_normalize( _pep_ac_encode* const ac );
-static uint32_t _pep_arith_decode_curr_freq( _pep_ac_decode* const ac, const uint32_t scale );
-static void _pep_arith_decode_update( _pep_ac_decode* const ac, const _pep_prob prob );
-static _pep_sym_decode _pep_get_sym_from_freq( const _pep_context* const context, const uint32_t target_freq );
-static uint32_t _pep_pre_multiply( const uint32_t pixel, const pep_format format );
-static uint32_t _pep_reformat( const uint32_t in_color, const pep_format in_format, const pep_format out_format );
-
-static pep pep_compress( const uint32_t* in_pixels, const uint16_t width, const uint16_t height, const pep_format in_format, const pep_channel_bits in_channel_bits );
-static uint32_t* pep_decompress( const pep* const in_pep, const pep_format out_format, const uint8_t first_color_transparent, uint8_t const pre_multiply );
-static void pep_free( pep* in_pep );
-static uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_size );
-static pep pep_deserialize( const uint8_t* const in_bytes, const uint32_t in_bytes_size );
-static uint8_t pep_save( const pep* const in_pep, const char* const file_path );
-static pep pep_load( const char* const file_path );
+pep pep_compress( const uint32_t* in_pixels, const uint16_t width, const uint16_t height, const pep_format in_format, const pep_channel_bits in_channel_bits );
+uint32_t* pep_decompress( const pep* const in_pep, const pep_format out_format, const uint8_t first_color_transparent, uint8_t const pre_multiply );
+void pep_free( pep* in_pep );
+uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_size );
+pep pep_deserialize( const uint8_t* const in_bytes, const uint32_t in_bytes_size );
+uint8_t pep_save( const pep* const in_pep, const char* const file_path );
+pep pep_load( const char* const file_path );
 
 #pragma endregion functions
 
@@ -291,6 +282,19 @@ static pep pep_load( const char* const file_path );
 //
 
 #ifdef PEP_IMPLEMENTATION
+
+#pragma region - private / functions
+
+static _pep_prob _pep_get_prob_from_context( const _pep_context* const context, const uint32_t symbol );
+static void _pep_arith_encode( _pep_ac_encode* const ac, const _pep_prob prob );
+static void _pep_arith_encode_normalize( _pep_ac_encode* const ac );
+static uint32_t _pep_arith_decode_curr_freq( _pep_ac_decode* const ac, const uint32_t scale );
+static void _pep_arith_decode_update( _pep_ac_decode* const ac, const _pep_prob prob );
+static _pep_sym_decode _pep_get_sym_from_freq( const _pep_context* const context, const uint32_t target_freq );
+static uint32_t _pep_pre_multiply( const uint32_t pixel, const pep_format format );
+static uint32_t _pep_reformat( const uint32_t in_color, const pep_format in_format, const pep_format out_format );
+
+#pragma endregion private / functions
 
 #ifdef _MSC_VER
 	// Intrin header is only needed for implementation.
@@ -709,7 +713,7 @@ static uint64_t _pep_encode_model( const uint8_t* idx, uint16_t width, uint16_t 
 
 // Compresses raw pixels into a pep, trying each context model and keeping the
 // smallest result (the winning model index is stored in out.model).
-static pep pep_compress( const uint32_t* in_pixels, const uint16_t width, const uint16_t height, const pep_format in_format, const pep_channel_bits in_channel_bits )
+pep pep_compress( const uint32_t* in_pixels, const uint16_t width, const uint16_t height, const pep_format in_format, const pep_channel_bits in_channel_bits )
 {
 	pep out_pep = { 0 };
 	uint32_t area = ( uint32_t )width * height;
@@ -855,7 +859,7 @@ static void _pep_decode_model( const uint8_t* in_bytes, uint64_t in_size, uint16
 	_pep_model_free( &m );
 }
 
-static uint32_t* pep_decompress( const pep* const in_pep, const pep_format out_format, const uint8_t transparent_first_color, uint8_t const pre_multiply )
+uint32_t* pep_decompress( const pep* const in_pep, const pep_format out_format, const uint8_t transparent_first_color, uint8_t const pre_multiply )
 {
 	if( in_pep == NULL ) return NULL;
 	if( in_pep->bytes == NULL || in_pep->bytes_size == 0 || in_pep->width == 0 || in_pep->height == 0 ) return NULL;
@@ -884,7 +888,7 @@ static uint32_t* pep_decompress( const pep* const in_pep, const pep_format out_f
 	return out_pixels;
 }
 
-static void pep_free( pep* in_pep )
+void pep_free( pep* in_pep )
 {
 	if( in_pep && in_pep->bytes )
 	{
@@ -901,7 +905,7 @@ static void pep_free( pep* in_pep )
 ////////////////////////////////////////////////////////////////
 #pragma region - serialization
 
-static uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_size )
+uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_size )
 {
 	if( !in_pep || !in_pep->width || !in_pep->height || !in_pep->bytes_size || !in_pep->bytes )
 	{
@@ -1071,7 +1075,7 @@ static uint8_t* pep_serialize( const pep* in_pep, uint32_t* const out_size )
 	return out_bytes;
 }
 
-static pep pep_deserialize( const uint8_t* const in_bytes, const uint32_t in_bytes_size )
+pep pep_deserialize( const uint8_t* const in_bytes, const uint32_t in_bytes_size )
 {
 	pep out_pep = { 0 };
 
@@ -1234,7 +1238,7 @@ static pep pep_deserialize( const uint8_t* const in_bytes, const uint32_t in_byt
 
 // Saves pep into a file.
 // Returns 0 on failure, 1 on success
-static uint8_t pep_save( const pep* const in_pep, const char* const file_path )
+uint8_t pep_save( const pep* const in_pep, const char* const file_path )
 {
 	if( !in_pep || !file_path )
 	{
@@ -1269,7 +1273,7 @@ static uint8_t pep_save( const pep* const in_pep, const char* const file_path )
 }
 
 // Loads .pep file into returned pep struct
-static pep pep_load( const char* const file_path )
+pep pep_load( const char* const file_path )
 {
 	pep out_pep = { 0 };
 
