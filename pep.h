@@ -516,7 +516,6 @@ enum
 {
 	_PEP_TAP_HASH,
 	_PEP_TAP_NW,
-	_PEP_TAP_N,
 	_PEP_TAP_W
 };
 
@@ -564,7 +563,6 @@ static uint8_t _pep_model_init( _pep_model_context* m, int8_t kind, uint32_t pco
 			off += m->index_end * m->index_end;
 			break;
 		}
-		case _PEP_TAP_N:
 		case _PEP_TAP_W:
 		{
 			off += m->index_end;
@@ -625,10 +623,6 @@ static _pep_context* _pep_build_level( const _pep_model_context* m, const uint8_
 		case _PEP_TAP_NW:
 		{
 			return &m->contexts[ 1 + Nv * index_end + Wv ];
-		}
-		case _PEP_TAP_N:
-		{
-			return &m->contexts[ 1 + Nv ];
 		}
 		case _PEP_TAP_W:
 		{
