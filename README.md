@@ -1,6 +1,6 @@
-<p align="center">
-	<img width="960" height="540" alt="logo" src="https://github.com/user-attachments/assets/d251f370-fb1d-4598-a4d9-55070fe5e105" />
-</p>
+<div align="center">
+	<picture><img width="960" height="540" alt="title" src="https://github.com/user-attachments/assets/a8327aed-3945-4bda-819e-e631f9f03af8" /></picture>
+</div>
 
 # Prediction-Encoded Pixels
 This format is specifically designed to be for low-color pixel art (<=16 colors works best, up to 256 colors is supported).
@@ -34,32 +34,36 @@ Use the C header like:
 
 <img width="112" height="96" alt="tree1" src="https://github.com/user-attachments/assets/c4ef770b-7ec0-4738-a86f-44c012dedf22" />
 
-112x96 : 4 colors
+112x96 : 4 colors (channel_bits:4)
 
 | Format | Size (bytes) | Compression Ratio | Speed |
 |--------|-------------|-------------------|-------|
-| **PEP** | 849    | 0.155x | Fast |
-| **PNG (max)** | 906    | 0.165x | Very Slow |
-| **GIF** | 1,047  | 0.191x | Faster |
-| **PNG (fast)** | 1,081    | 0.197x | Faster |
-| **QOI** | 2,425  | 0.441x | Very Fast |
-| **BMP** | 5,494 | 1.00x  | Very Fast |
+| **PEP** | 539 | 0.098x | Fast |
+| **JPEG XL** | 652 | 0.119x | Fast |
+| **WebP** | 874 | 0.159x | Slow |
+| **PNG (max)** | 906 | 0.165x | Very Slow |
+| **GIF** | 1,047 | 0.191x | Faster |
+| **PNG (fast)** | 1,081 | 0.197x | Faster |
+| **QOI** | 2,425 | 0.441x | Very Fast |
+| **BMP** | 5,494 | 1.00x | Very Fast |
 
 
 ## font
 
 <img width="192" height="144" alt="font" src="https://github.com/user-attachments/assets/f2c6a5bc-d516-4947-b888-491afe014a57" />
 
-192x144 : 2 colors
+192x144 : 2 colors (channel_bits:1)
 
 | Format | Size (bytes) | Compression Ratio | Speed |
 |--------|-------------|-------------------|-------|
-| **PNG (max)** | 1,256   | 0.350x | Very Slow |
-| **PEP** | 1,298   | 0.362x | Fast |
-| **PNG (fast)** | 1,835   | 0.512x | Faster |
-| **GIF** | 1,919   | 0.535x | Faster |
-| **BMP** | 3,586   | 1.00x  | Very Fast |
-| **QOI** | 6,669   | 1.860x | Very Fast |
+| **PEP** | 796 | 0.222x | Fast |
+| **JPEG XL** | 913 | 0.255x | Fast |
+| **WebP** | 1,252 | 0.349x | Slow |
+| **PNG (max)** | 1,256 | 0.350x | Very Slow |
+| **PNG (fast)** | 1,835 | 0.512x | Faster |
+| **GIF** | 1,919 | 0.535x | Faster |
+| **BMP** | 3,586 | 1.00x | Very Fast |
+| **QOI** | 6,669 | 1.860x | Very Fast |
 
 
 ## nz_scene
@@ -70,8 +74,10 @@ Use the C header like:
 
 | Format | Size (bytes) | Compression Ratio | Speed |
 |--------|-------------|-------------------|-------|
-| **PEP** | 70,991 | 0.550x | Fast |
+| **PEP** | 70,829 | 0.549x | Fast |
+| **WebP** | 71,722  | 0.556x | Slow |
 | **PNG (max)** | 81,038 | 0.628x | Very Slow |
+| **JPEG XL** | 81,276  | 0.630x | Fast |
 | **PNG (fast)** | 85,375 | 0.661x | Faster |
 | **GIF** | 96,997 | 0.751x | Faster |
 | **BMP** | 129,078 | 1.00x | Very Fast |
@@ -86,7 +92,7 @@ Use the C header like:
 
 | Format | Size (bytes) | Compression Ratio | Speed |
 |--------|-------------|-------------------|-------|
-| **PEP** | 154,967 | 0.589x | Fast |
+| **PEP** | 154,778 | 0.588x | Fast |
 | **PNG (max)** | 184,219 | 0.700x | Very Slow |
 | **PNG (fast)** | 195,130 | 0.741x | Faster |
 | **GIF** | 221,165 | 0.840x | Faster |
