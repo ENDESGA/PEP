@@ -396,7 +396,7 @@ static void _pep_arith_decode_update( _pep_ac_decode* const ac, const _pep_prob 
 
 static _pep_sym_decode _pep_get_sym_from_freq( const _pep_context* const context, const uint32_t target_freq )
 {
-	_pep_sym_decode result = { };
+	_pep_sym_decode result = { 0 };
 
 	uint32_t s = 0;
 	uint32_t freq = 0;
