@@ -1,5 +1,5 @@
 <div align="center">
-	<picture><img width="960" height="540" alt="title" src="https://github.com/user-attachments/assets/a8327aed-3945-4bda-819e-e631f9f03af8" /></picture>
+	<picture><img src="https://github.com/user-attachments/assets/a8327aed-3945-4bda-819e-e631f9f03af8" /></picture>
 </div>
 
 # Prediction-Encoded Pixels
