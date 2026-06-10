@@ -8,6 +8,7 @@
 //  contributer(s):
 //  Mariusz Dzikowski - https://github.com/demurzasty
 //  Akreson - https://github.com/Akreson
+//  Alepacho - https://github.com/Alepacho
 //
 //  https://github.com/ENDESGA/pep
 //  2026 - CC0 - FOSS forever
@@ -38,14 +39,8 @@
 #pragma region - MACROS
 //
 
-////////////////////////////////////////////////////////////////
-#pragma region - stringify
-
-// builds the version string in CONSTANTS (swap for AS_BYTES if used)
 #define __PEP_STRINGIFY( VALUE ) #VALUE
 #define _PEP_STRINGIFY( VALUE ) __PEP_STRINGIFY( VALUE )
-
-#pragma endregion stringify
 
 ////////////////////////////////////////////////////////////////
 #pragma region - memory
@@ -880,7 +875,7 @@ uint32_t* pep_decompress( const pep* const in_pep, const pep_format out_format, 
 	}
 
 	uint8_t model = in_pep->model;
-	if( model < 0 || model >= PEP_NUM_MODELS ) model = 0;
+	if( model >= PEP_NUM_MODELS ) model = 0;
 
 	_pep_decode_model( in_pep->bytes, in_pep->bytes_size, width, height, pcount, model, palette, in_pep->format, out_format, pre_multiply, idx, out_pixels );
 
